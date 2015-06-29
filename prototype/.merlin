@@ -1,0 +1,7 @@
+B _build/
+S .
+
+PKG genlet
+PKG bigarray
+
+EXT meta
