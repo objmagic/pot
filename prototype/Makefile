@@ -5,13 +5,13 @@ all: build
 
 OCAMLBUILD = ocamlbuild
 METAOCAMLC = metaocamlc
-TARGET = normal_parser.byte staging_parser.byte
+TARGET = nparser.byte sparser.byte
 
 build:
 	$(OCAMLBUILD) -tag annot -tag bin_annot -pkgs genlet,bigarray -ocamlc $(METAOCAMLC) $(TARGET)
 
 clean:
-	ocamlbuild -clean
-	rm -rf *.cmi *.cmo *.out
+	ocamlbuild -ocamlc $(METAOCAMLC) -clean
+	rm -rf *.cmi *.cmo *.out *.byte
 
 .PHONY: byte clean

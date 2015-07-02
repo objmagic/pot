@@ -62,25 +62,23 @@ module type Parser = sig
     | Success of 'a * state
     | Failure of state
 
-  type 'a parser = state -> 'a parse_result
-
   type _ cgrammar =
     | Lit    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
     | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
     | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
-    | Either : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
+    | Either : 'a cgrammar * 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
     | Rep    : 'a cgrammar -> ('a list) cgrammar
 
   val lit : elem -> elem cgrammar
 
   val (<~>) : 'a cgrammar -> 'b cgrammar -> ('a * 'b) cgrammar
        
-  val (>>)  : 'a cgrammar -> _ cgrammar -> 'a cgrammar
+  val (>>)  : _ cgrammar -> 'a cgrammar -> 'a cgrammar
       
-  val (<<)  : _ cgrammar -> 'a cgrammar -> 'a cgrammar
+  val (<<)  : 'a cgrammar -> _ cgrammar -> 'a cgrammar
    
-  val (<|>) : 'a cgrammar -> 'b cgrammar -> ('a * 'b) cgrammar
+  val (<|>) : 'a cgrammar -> 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
 
   val rep : 'a cgrammar -> ('a list) cgrammar
 
@@ -97,23 +95,21 @@ module Parser (Reader: Reader) : Parser
     | Success of 'a * state
     | Failure of state
 
-  type 'a parser = state -> 'a parse_result
-
   type _ cgrammar =
-    | Lit : elem -> elem cgrammar
-    | Seq : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
-    | Left : 'a cgrammar * 'b cgrammar -> 'a cgrammar
-    | Right : 'a cgrammar * 'b cgrammar -> 'b cgrammar
-    | Either : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
-    | Rep : 'a cgrammar -> ('a list) cgrammar
+    | Lit    : elem -> elem cgrammar
+    | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
+    | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
+    | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
+    | Either : 'a cgrammar * 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
+    | Rep    : 'a cgrammar -> ('a list) cgrammar
 
   let lit elem = Lit elem
 
   let (<~>) a b = Seq (a, b)
 
-  let (>>) a b = Left (a, b)
+  let (>>) a b = Right (a, b)
 
-  let (<<) a b = Right (a, b)
+  let (<<) a b = Left (a, b)
 
   let (<|>) a b = Either (a, b)
 
@@ -130,5 +126,3 @@ module Char_parser = struct
     col = 0;
   }
 end
-
-include Char_parser
