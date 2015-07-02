@@ -62,6 +62,8 @@ module type Parser = sig
     | Success of 'a * state
     | Failure of state
 
+  type 'a parser = state -> 'a parse_result
+
   type _ cgrammar =
     | Lit    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
@@ -94,6 +96,8 @@ module Parser (Reader: Reader) : Parser
   type 'a parse_result =
     | Success of 'a * state
     | Failure of state
+
+  type 'a parser = state -> 'a parse_result
 
   type _ cgrammar =
     | Lit    : elem -> elem cgrammar
