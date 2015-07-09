@@ -1,5 +1,3 @@
-(*  ((lit 'a') <~> (lit 'b')) <|> (lit 'c') *)
-
 .<
 let res1_15 =
   let res1_4 =

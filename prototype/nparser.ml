@@ -65,25 +65,33 @@ module type Parser = sig
   type 'a parser = state -> 'a parse_result
 
   type _ cgrammar =
-    | Lit    : elem -> elem cgrammar
-    | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
-    | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
-    | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
-    | Either : 'a cgrammar * 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
-    | Rep    : 'a cgrammar -> ('a list) cgrammar
+    | Lit    : string * elem -> elem cgrammar
+    | Seq    : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> ('a * 'b) cgrammar
+    | Left   : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> 'a cgrammar
+    | Right  : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> 'b cgrammar
+    | Either : string * 'a cgrammar lazy_t list  -> 'a cgrammar
+    | Rep    : string * 'a cgrammar lazy_t -> ('a list) cgrammar
+    | Repsep : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> ('a list) cgrammar
+    | TakeWhile : string * ('a -> bool) -> ('a list) cgrammar
+    | Trans : string * ('a -> 'b) * 'a cgrammar lazy_t -> 'b cgrammar
 
   val lit : elem -> elem cgrammar
 
-  val (<~>) : 'a cgrammar -> 'b cgrammar -> ('a * 'b) cgrammar
-       
-  val (>>)  : _ cgrammar -> 'a cgrammar -> 'a cgrammar
-      
-  val (<<)  : 'a cgrammar -> _ cgrammar -> 'a cgrammar
-   
-  val (<|>) : 'a cgrammar -> 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
+  val (<~>) : 'a cgrammar lazy_t -> 'b cgrammar lazy_t -> ('a * 'b) cgrammar
 
-  val rep : 'a cgrammar -> ('a list) cgrammar
+  val (>>)  : _ cgrammar lazy_t -> 'a cgrammar lazy_t -> 'a cgrammar
 
+  val (<<)  : 'a cgrammar lazy_t -> _ cgrammar lazy_t -> 'a cgrammar
+
+  val either : 'a cgrammar lazy_t list -> 'a cgrammar
+
+  val rep : 'a cgrammar lazy_t -> ('a list) cgrammar
+
+  val repsep : 'a cgrammar lazy_t -> 'b cgrammar lazy_t -> ('a list) cgrammar
+
+  val takewhile : ('a -> bool) -> ('a list) cgrammar
+
+  val (<*>) : ('a -> 'b) -> 'a cgrammar lazy_t -> 'b cgrammar
 end
 
 module Parser (Reader: Reader) : Parser
@@ -100,24 +108,42 @@ module Parser (Reader: Reader) : Parser
   type 'a parser = state -> 'a parse_result
 
   type _ cgrammar =
-    | Lit    : elem -> elem cgrammar
-    | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
-    | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
-    | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
-    | Either : 'a cgrammar * 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
-    | Rep    : 'a cgrammar -> ('a list) cgrammar
+    | Lit    : string * elem -> elem cgrammar
+    | Seq    : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> ('a * 'b) cgrammar
+    | Left   : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> 'a cgrammar
+    | Right  : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> 'b cgrammar
+    | Either : string * 'a cgrammar lazy_t list  -> 'a cgrammar
+    | Rep    : string * 'a cgrammar lazy_t -> ('a list) cgrammar
+    | Repsep : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> ('a list) cgrammar
+    | TakeWhile : string * ('a -> bool) -> ('a list) cgrammar
+    | Trans : string * ('a -> 'b) * 'a cgrammar lazy_t -> 'b cgrammar
 
-  let lit elem = Lit elem
+  module Nonce = struct
+    let i = ref 0L
 
-  let (<~>) a b = Seq (a, b)
+    let nonce () = i := Int64.succ !i; Int64.to_string !i
+  end
 
-  let (>>) a b = Right (a, b)
+  include Nonce
 
-  let (<<) a b = Left (a, b)
+  let lit elem = Lit (nonce (), elem)
 
-  let (<|>) a b = Either (a, b)
+  let (<~>) a b = Seq (nonce (), a, b)
 
-  let rep a = Rep a
+  let (>>) a b = Right (nonce (), a, b)
+
+  let (<<) a b = Left (nonce (), a, b)
+
+  let either al = Either (nonce (), al)
+
+  let rep a = Rep (nonce (), a)
+
+  let repsep a b = Repsep (nonce (), a, b)
+
+  let takewhile f = TakeWhile (nonce (), f)
+
+  let (<*>) f a = Trans (nonce (), f, a)
+
 end
 
 module Char_parser = struct
@@ -129,4 +155,33 @@ module Char_parser = struct
     row = 0;
     col = 0;
   }
+end
+
+module type XS = sig
+  include module type of Char_parser
+
+  val takeWhile: (char -> bool) -> string cgrammar
+
+  val (<***>) : ('a cgrammar) -> ('a -> 'b) -> ('b cgrammar)
+
+  val repsep: ('a cgrammar) -> elem cgrammar -> ('a list cgrammar)
+end
+
+
+module M (X: XS) =
+struct
+
+  open X
+  open Char_parser
+
+  type json = Obj of obj | Arr of arr | StringLit of string | Int of int | Float of float
+  and obj = member list
+  and member = (string * json) list
+  and arr = json list
+
+  type 'a rule = {
+    name: string;
+    grammar: 'a cgrammar;
+  }
+
 end

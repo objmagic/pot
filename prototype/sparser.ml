@@ -1,5 +1,6 @@
 open Print_code
 open Format
+open Gengenlet
 
 module PP = struct
   let pp_code code = print_code Format.std_formatter code
@@ -17,6 +18,12 @@ module CFParser = struct
 
   type 'a parser_generator =
     'a cgrammar -> 'a parser_code
+
+  (* let-rec insertion helper by Jeremy *)
+  let letrec : 'a 'b 'c.(('a -> 'b) code -> (('a -> 'b) code -> unit code) -> 'c) -> 'c =
+    fun k ->
+      let r = genlet (.< ref (fun _ -> assert false) >.) in
+      k .< ! .~r >. (fun e -> genlet (.<.~r := .~e >.))
 
   let gen_lit_parser : char -> char parser_code =
     fun c state -> .<
@@ -66,17 +73,29 @@ module CFParser = struct
         | Failure state1 -> Failure state1 >.
 
   let gen_either_parser :
-    ('a parser_code) -> ('b parser_code) -> ([`Left of 'a | `Right of 'b] parser_code) =
+    ('a parser_code) -> ('a parser_code) -> ('a parser_code) =
     fun pcx pcy state -> .<
       let res1 = .~(pcx state) in
       match res1 with
-      | Success (v1, state1) -> Success (`Left v1, state1)
-      | Failure _ ->
-        let res2 = .~(pcy state) in
-        match res2 with
-        | Success (v2, state2) -> Success (`Right v2, state2)
-        | Failure _ as f -> f >.
+      | Success (_, _) as s -> s
+      | Failure _ -> .~(pcy state)>.
 
+  (*
+      let rec rep_parser state res =
+        let res = .~(parser state) in
+        match res with
+        | Success of s1, r1 as s -> rep_parser .<s1>. res
+        | Failure s -> .<Success s, res>.
+
+     *)
+  let gen_rep_parser : ('a parser_code) -> ('a list parser_code) = fun p s ->
+    .<let rec rep_parser state acc =
+        let res = .~(p .<state>.) in
+        match res with
+        | Success (r1, s1) -> rep_parser s1 (r1 :: acc)
+        | Failure s1 -> Success (acc, s1) in rep_parser .~s []>.
+  
+  (*
   (** GADT, weeeeeeeeeee! *)
   let rec gen_parser : type a. a parser_generator = fun c state ->
     match c with
@@ -93,24 +112,54 @@ module CFParser = struct
     | Either (g1, g2) ->
       let c1 = gen_parser g1 and c2 = gen_parser g2 in
       gen_either_parser c1 c2 state
+    | Rep g -> gen_rep_parser (gen_parser g) state
     | _ -> failwith "TODO"
+  *)
 
+  (*
   let grammar_z = lit 'a'
 
   let grammar_lit = lit 'a' <~> lit 'b'
 
-  let grammar_a = ((lit 'a') <~> (lit 'b')) <|> (lit 'c')
-
-  let grammar_b = ((lit 'a') <|> (lit 'b')) <~> (lit 'c')
+  let grammar_b = (either [(lit 'a'); (lit 'b')]) <~> (lit 'c')
 
   let grammar_e = (lit 'a') >> (lit 'b') << (lit 'c')
 
+  let grammar_f = lit 'w' <~> (rep (lit 'e'))
+
+  let grammar_g = rep (lit 'e')
+
+  *)
+
+  type json = Obj of obj | Arr of arr | StringLit of string
+  and  obj = member list
+  and  member = string * json
+  and  arr = json list
+
+  let rec json_parser = lazy (either [
+    lazy ((fun obj -> Obj obj) <*> obj_parser);
+    lazy ((fun arr -> Arr arr) <*> arr_parser);
+    lazy ((fun str -> StringLit str) <*> stringLit_parser)])
+
+  and obj_parser = lazy (
+    lazy ((lazy (lit '{')) >> (lazy (repsep member_parser (lazy (lit ','))))) << (lazy (lit '}')))
+
+  and stringLit_parser = lazy ((fun cl -> List.map (fun c -> String.make 1 c) cl |> String.concat "") <*> (lazy (
+    lazy ((lazy (lit '"')) >> (lazy (takewhile (fun c -> c <> '"')))) << (lazy (lit '"')))))
+
+  and arr_parser = lazy (
+    lazy ((lazy (lit '[')) >> (lazy (repsep json_parser (lazy (lit ','))))) << (lazy (lit ']')))
+
+  and member_parser = lazy (
+    stringLit_parser <~> lazy ((lazy (lit ':')) >> json_parser) )
+
 end
 
+(*
 let c1 () =
   let open Nparser.Char_parser in
-  let parser_code = CFParser.gen_parser CFParser.grammar_e in
-  let s = init_state_from_string "ab" in
+  let parser_code = CFParser.gen_parser CFParser.grammar_f in
+  let s = init_state_from_string "weee" in
   parser_code .<s>.
 
 (*
@@ -120,7 +169,18 @@ let c1 () =
   | Failure s -> Printf.sprintf "Fail at row %d, col %d, index %d" s.row s.col s.index
 *)
 
-let () =
+let see_code () =
   (* add runtime search path because we are using ``ocamlbuild'' *)
   Runcode.(add_search_path "./_build");
   PP.pp_code (c1 ())
+
+let run () =
+  Runcode.(add_search_path "./_build");
+  match Runcode.(!. (c1 ())) with
+  | Nparser.Char_parser.Failure _ -> failwith "no!"
+  | Nparser.Char_parser.Success ((c, rl), s) ->
+    Printf.printf "%c\n" c;
+    List.iter (fun c -> Printf.printf "%c\n" c) rl
+
+let () = run ()
+*)
