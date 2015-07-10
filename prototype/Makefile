@@ -1,7 +1,7 @@
 #
 # Build system for ocs library and interpreter
 #
-all: build
+all: clean build
 
 OCAMLBUILD = ocamlbuild
 METAOCAMLC = metaocamlc

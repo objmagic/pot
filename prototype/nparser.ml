@@ -65,33 +65,34 @@ module type Parser = sig
   type 'a parser = state -> 'a parse_result
 
   type _ cgrammar =
-    | Lit    : string * elem -> elem cgrammar
-    | Seq    : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> ('a * 'b) cgrammar
-    | Left   : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> 'a cgrammar
-    | Right  : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> 'b cgrammar
-    | Either : string * 'a cgrammar lazy_t list  -> 'a cgrammar
-    | Rep    : string * 'a cgrammar lazy_t -> ('a list) cgrammar
-    | Repsep : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> ('a list) cgrammar
-    | TakeWhile : string * ('a -> bool) -> ('a list) cgrammar
-    | Trans : string * ('a -> 'b) * 'a cgrammar lazy_t -> 'b cgrammar
+    | Lit    : elem -> elem cgrammar
+    | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
+    | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
+    | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
+    | Either : 'a cgrammar list  -> 'a cgrammar
+    | Rep    : 'a cgrammar -> ('a list) cgrammar
+    | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
+    | TakeWhile : ('a -> bool) -> ('a list) cgrammar
+    | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
+
 
   val lit : elem -> elem cgrammar
 
-  val (<~>) : 'a cgrammar lazy_t -> 'b cgrammar lazy_t -> ('a * 'b) cgrammar
+  val (<~>) : 'a cgrammar -> 'b cgrammar -> ('a * 'b) cgrammar
 
-  val (>>)  : _ cgrammar lazy_t -> 'a cgrammar lazy_t -> 'a cgrammar
+  val (>>)  : _ cgrammar -> 'a cgrammar -> 'a cgrammar
 
-  val (<<)  : 'a cgrammar lazy_t -> _ cgrammar lazy_t -> 'a cgrammar
+  val (<<)  : 'a cgrammar -> _ cgrammar -> 'a cgrammar
 
-  val either : 'a cgrammar lazy_t list -> 'a cgrammar
+  val either : 'a cgrammar list -> 'a cgrammar
 
-  val rep : 'a cgrammar lazy_t -> ('a list) cgrammar
+  val rep : 'a cgrammar -> ('a list) cgrammar
 
-  val repsep : 'a cgrammar lazy_t -> 'b cgrammar lazy_t -> ('a list) cgrammar
+  val repsep : 'a cgrammar -> 'b cgrammar -> ('a list) cgrammar
 
   val takewhile : ('a -> bool) -> ('a list) cgrammar
 
-  val (<*>) : ('a -> 'b) -> 'a cgrammar lazy_t -> 'b cgrammar
+  val (<*>) : ('a -> 'b) -> 'a cgrammar -> 'b cgrammar
 end
 
 module Parser (Reader: Reader) : Parser
@@ -108,15 +109,15 @@ module Parser (Reader: Reader) : Parser
   type 'a parser = state -> 'a parse_result
 
   type _ cgrammar =
-    | Lit    : string * elem -> elem cgrammar
-    | Seq    : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> ('a * 'b) cgrammar
-    | Left   : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> 'a cgrammar
-    | Right  : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> 'b cgrammar
-    | Either : string * 'a cgrammar lazy_t list  -> 'a cgrammar
-    | Rep    : string * 'a cgrammar lazy_t -> ('a list) cgrammar
-    | Repsep : string * 'a cgrammar lazy_t * 'b cgrammar lazy_t -> ('a list) cgrammar
-    | TakeWhile : string * ('a -> bool) -> ('a list) cgrammar
-    | Trans : string * ('a -> 'b) * 'a cgrammar lazy_t -> 'b cgrammar
+    | Lit    : elem -> elem cgrammar
+    | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
+    | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
+    | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
+    | Either : 'a cgrammar list  -> 'a cgrammar
+    | Rep    : 'a cgrammar -> ('a list) cgrammar
+    | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
+    | TakeWhile : ('a -> bool) -> ('a list) cgrammar
+    | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
 
   module Nonce = struct
     let i = ref 0L
@@ -126,23 +127,23 @@ module Parser (Reader: Reader) : Parser
 
   include Nonce
 
-  let lit elem = Lit (nonce (), elem)
+  let lit elem = Lit elem
 
-  let (<~>) a b = Seq (nonce (), a, b)
+  let (<~>) a b = Seq (a, b)
 
-  let (>>) a b = Right (nonce (), a, b)
+  let (>>) a b = Right (a, b)
 
-  let (<<) a b = Left (nonce (), a, b)
+  let (<<) a b = Left (a, b)
 
-  let either al = Either (nonce (), al)
+  let either al = Either al
 
-  let rep a = Rep (nonce (), a)
+  let rep a = Rep a
 
-  let repsep a b = Repsep (nonce (), a, b)
+  let repsep a b = Repsep (a, b)
 
-  let takewhile f = TakeWhile (nonce (), f)
+  let takewhile f = TakeWhile f
 
-  let (<*>) f a = Trans (nonce (), f, a)
+  let (<*>) f a = Trans (f, a)
 
 end
 
@@ -155,8 +156,18 @@ module Char_parser = struct
     row = 0;
     col = 0;
   }
+
+  type json = Obj of obj | Arr of arr | StringLit of string
+  and  obj = member list
+  and  member = string * json
+  and  arr = json list
+
+  type t2 = A of t3 | S of string
+  and t3 = t2
+
 end
 
+(*
 module type XS = sig
   include module type of Char_parser
 
@@ -185,3 +196,4 @@ struct
   }
 
 end
+   *)

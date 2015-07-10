@@ -73,12 +73,18 @@ module CFParser = struct
         | Failure state1 -> Failure state1 >.
 
   let gen_either_parser :
-    ('a parser_code) -> ('a parser_code) -> ('a parser_code) =
-    fun pcx pcy state -> .<
-      let res1 = .~(pcx state) in
-      match res1 with
-      | Success (_, _) as s -> s
-      | Failure _ -> .~(pcy state)>.
+    ('a parser_code) list -> ('a parser_code) =
+    fun l s ->
+      let combine : ('a parser_code) -> ('a parser_code) -> ('a parser_code) =
+        fun pcx pcy state -> .<
+          let res1 = .~(pcx state) in
+          match res1 with
+          | Success (_, _) as s -> s
+          | Failure _ -> .~(pcy state)>. in
+      match l with
+      | x :: res ->
+        (List.fold_left combine x res) s
+      | _ -> failwith "Invalid grammar"
 
   (*
       let rec rep_parser state res =
@@ -95,11 +101,12 @@ module CFParser = struct
         | Success (r1, s1) -> rep_parser s1 (r1 :: acc)
         | Failure s1 -> Success (acc, s1) in rep_parser .~s []>.
   
-  (*
   (** GADT, weeeeeeeeeee! *)
   let rec gen_parser : type a. a parser_generator = fun c state ->
     match c with
     | Lit e -> gen_lit_parser e state
+    | Either gl -> gen_either_parser (List.map gen_parser gl) state
+    (*
     | Seq (g1, g2) ->
       let c1 = gen_parser g1 and c2 = gen_parser g2 in
       gen_seq_parser c1 c2 state
@@ -112,62 +119,41 @@ module CFParser = struct
     | Either (g1, g2) ->
       let c1 = gen_parser g1 and c2 = gen_parser g2 in
       gen_either_parser c1 c2 state
-    | Rep g -> gen_rep_parser (gen_parser g) state
+    | Rep g -> gen_rep_parser (gen_parser g) state *)
     | _ -> failwith "TODO"
-  *)
 
-  (*
-  let grammar_z = lit 'a'
+  let str_parser =
+    Trans (
+      (fun cl -> List.map (fun c -> String.make 1 c) cl |> String.concat ""),
+      Left ((Right ((lit '"'), (TakeWhile (fun c -> c <> '"')))), (Lit '"')))
 
-  let grammar_lit = lit 'a' <~> lit 'b'
+  let rec json_parser = Either ([
+      Trans ((fun o -> Obj o), obj_parser);
+      Trans ((fun a -> Arr a), arr_parser);
+      Trans ((fun s -> StringLit s), str_parser)])
+  and obj_parser =
+    Left ((Right ((Lit '{'), (Repsep (member_parser, (Lit ','))))), (Lit '}'))
+  and arr_parser =
+    Left ((Right ((Lit '['), (Repsep (json_parser, (Lit ','))))), (Lit ']'))
+  and member_parser =
+    Seq (str_parser, Right ((Lit ':'), json_parser))
 
-  let grammar_b = (either [(lit 'a'); (lit 'b')]) <~> (lit 'c')
+  let rec t2_parser = Either ([
+      Trans ((fun arr -> A arr), arr_parser);
+      Trans ((fun str -> S str), str_parser)])
+  and arr_parser =
+    Left ((Right ((Lit '['), t2_parser)), (Lit ']'))
 
-  let grammar_e = (lit 'a') >> (lit 'b') << (lit 'c')
-
-  let grammar_f = lit 'w' <~> (rep (lit 'e'))
-
-  let grammar_g = rep (lit 'e')
-
-  *)
-
-  type json = Obj of obj | Arr of arr | StringLit of string
-  and  obj = member list
-  and  member = string * json
-  and  arr = json list
-
-  let rec json_parser = lazy (either [
-    lazy ((fun obj -> Obj obj) <*> obj_parser);
-    lazy ((fun arr -> Arr arr) <*> arr_parser);
-    lazy ((fun str -> StringLit str) <*> stringLit_parser)])
-
-  and obj_parser = lazy (
-    lazy ((lazy (lit '{')) >> (lazy (repsep member_parser (lazy (lit ','))))) << (lazy (lit '}')))
-
-  and stringLit_parser = lazy ((fun cl -> List.map (fun c -> String.make 1 c) cl |> String.concat "") <*> (lazy (
-    lazy ((lazy (lit '"')) >> (lazy (takewhile (fun c -> c <> '"')))) << (lazy (lit '"')))))
-
-  and arr_parser = lazy (
-    lazy ((lazy (lit '[')) >> (lazy (repsep json_parser (lazy (lit ','))))) << (lazy (lit ']')))
-
-  and member_parser = lazy (
-    stringLit_parser <~> lazy ((lazy (lit ':')) >> json_parser) )
+  let either_test = Either ([
+      lit 'a'; lit 'b'; lit 'c'; lit 'd'; lit 'e'; lit 'f'])
 
 end
 
-(*
 let c1 () =
   let open Nparser.Char_parser in
-  let parser_code = CFParser.gen_parser CFParser.grammar_f in
-  let s = init_state_from_string "weee" in
+  let parser_code = CFParser.gen_parser CFParser.either_test in
+  let s = init_state_from_string "c" in
   parser_code .<s>.
-
-(*
-  let state = init_state_from_string "abc" in
-  match (Runcode.run parser_code) state with
-  | Success (c, s) -> Printf.sprintf "Success %c" c
-  | Failure s -> Printf.sprintf "Fail at row %d, col %d, index %d" s.row s.col s.index
-*)
 
 let see_code () =
   (* add runtime search path because we are using ``ocamlbuild'' *)
@@ -177,10 +163,8 @@ let see_code () =
 let run () =
   Runcode.(add_search_path "./_build");
   match Runcode.(!. (c1 ())) with
-  | Nparser.Char_parser.Failure _ -> failwith "no!"
-  | Nparser.Char_parser.Success ((c, rl), s) ->
-    Printf.printf "%c\n" c;
-    List.iter (fun c -> Printf.printf "%c\n" c) rl
+  | Nparser.Char_parser.Failure _ -> failwith "Parsing failed"
+  | Nparser.Char_parser.Success (c, s) ->
+    Printf.printf "%c\n" c
 
-let () = run ()
-*)
+let () = see_code ()
