@@ -74,6 +74,7 @@ module type Parser = sig
     | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
     | TakeWhile : ('a -> bool) -> ('a list) cgrammar
     | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
+    | NT: string * 'a cgrammar Lazy.t -> 'a cgrammar
 
 
   val lit : elem -> elem cgrammar
@@ -118,6 +119,7 @@ module Parser (Reader: Reader) : Parser
     | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
     | TakeWhile : ('a -> bool) -> ('a list) cgrammar
     | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
+    | NT: string * 'a cgrammar Lazy.t -> 'a cgrammar
 
   module Nonce = struct
     let i = ref 0L
@@ -166,34 +168,3 @@ module Char_parser = struct
   and t3 = t2
 
 end
-
-(*
-module type XS = sig
-  include module type of Char_parser
-
-  val takeWhile: (char -> bool) -> string cgrammar
-
-  val (<***>) : ('a cgrammar) -> ('a -> 'b) -> ('b cgrammar)
-
-  val repsep: ('a cgrammar) -> elem cgrammar -> ('a list cgrammar)
-end
-
-
-module M (X: XS) =
-struct
-
-  open X
-  open Char_parser
-
-  type json = Obj of obj | Arr of arr | StringLit of string | Int of int | Float of float
-  and obj = member list
-  and member = (string * json) list
-  and arr = json list
-
-  type 'a rule = {
-    name: string;
-    grammar: 'a cgrammar;
-  }
-
-end
-   *)
