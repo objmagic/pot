@@ -69,21 +69,31 @@ module type Parser = sig
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
     | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
     | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
-    | Either : 'a cgrammar * 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
+    | Either : 'a cgrammar list  -> 'a cgrammar
     | Rep    : 'a cgrammar -> ('a list) cgrammar
+    | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
+    | TakeWhile : ('a -> bool) -> ('a list) cgrammar
+    | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
+    | NT: string * 'a cgrammar Lazy.t -> 'a cgrammar
+
 
   val lit : elem -> elem cgrammar
 
   val (<~>) : 'a cgrammar -> 'b cgrammar -> ('a * 'b) cgrammar
-       
+
   val (>>)  : _ cgrammar -> 'a cgrammar -> 'a cgrammar
-      
+
   val (<<)  : 'a cgrammar -> _ cgrammar -> 'a cgrammar
-   
-  val (<|>) : 'a cgrammar -> 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
+
+  val either : 'a cgrammar list -> 'a cgrammar
 
   val rep : 'a cgrammar -> ('a list) cgrammar
 
+  val repsep : 'a cgrammar -> 'b cgrammar -> ('a list) cgrammar
+
+  val takewhile : ('a -> bool) -> ('a list) cgrammar
+
+  val (<*>) : ('a -> 'b) -> 'a cgrammar -> 'b cgrammar
 end
 
 module Parser (Reader: Reader) : Parser
@@ -104,8 +114,20 @@ module Parser (Reader: Reader) : Parser
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
     | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
     | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
-    | Either : 'a cgrammar * 'b cgrammar -> [`Left of 'a | `Right of 'b] cgrammar
+    | Either : 'a cgrammar list  -> 'a cgrammar
     | Rep    : 'a cgrammar -> ('a list) cgrammar
+    | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
+    | TakeWhile : ('a -> bool) -> ('a list) cgrammar
+    | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
+    | NT: string * 'a cgrammar Lazy.t -> 'a cgrammar
+
+  module Nonce = struct
+    let i = ref 0L
+
+    let nonce () = i := Int64.succ !i; Int64.to_string !i
+  end
+
+  include Nonce
 
   let lit elem = Lit elem
 
@@ -115,9 +137,16 @@ module Parser (Reader: Reader) : Parser
 
   let (<<) a b = Left (a, b)
 
-  let (<|>) a b = Either (a, b)
+  let either al = Either al
 
   let rep a = Rep a
+
+  let repsep a b = Repsep (a, b)
+
+  let takewhile f = TakeWhile f
+
+  let (<*>) f a = Trans (f, a)
+
 end
 
 module Char_parser = struct
@@ -129,4 +158,13 @@ module Char_parser = struct
     row = 0;
     col = 0;
   }
+
+  type json = Obj of obj | Arr of arr | StringLit of string
+  and  obj = member list
+  and  member = string * json
+  and  arr = json list
+
+  type t2 = A of t3 | S of string
+  and t3 = t2
+
 end
