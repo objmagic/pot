@@ -8,16 +8,22 @@ module PP = struct
   let format_code closed_code = format_code Format.std_formatter closed_code
 end
 
+module Nonce = struct
+  let i = ref 0L
+
+  let nonce () = i := Int64.succ !i; Int64.to_string !i
+end
+
+
+open Nparser.Char_parser
+
+(* state is dynamic, grammar is static *)
+type 'a parser_code = state code -> 'a parse_result code
+
+type 'a parser_generator =
+  'a cgrammar -> 'a parser_code
+
 module CFParser = struct
-
-  open Nparser.Char_parser
-
-  (* state is dynamic, grammar is static *)
-
-  type 'a parser_code = state code -> 'a parse_result code
-
-  type 'a parser_generator =
-    'a cgrammar -> 'a parser_code
 
   (* let-rec insertion helper by Jeremy *)
   let letrec : 'a 'b 'c.(('a -> 'b) code -> (('a -> 'b) code -> unit code) -> 'c) -> 'c =
@@ -115,14 +121,6 @@ module CFParser = struct
     *)
     | _ -> failwith "TODO"
 
-
-
-  module Nonce = struct
-    let i = ref 0L
-
-    let nonce () = i := Int64.succ !i; Int64.to_string !i
-  end
-
   include Nonce
 
   let str_parser = NT (nonce (), lazy (
@@ -147,9 +145,10 @@ module CFParser = struct
   and arr_parser = NT (nonce (), lazy (
     (lit '[') >> (repsep json_parser (lit ',')) << (lit ']')))
   and member_parser = NT (nonce (), lazy (
-    Seq (str_parser, Right ((Lit ':'), json_parser))))
+    str_parser <~> ((lit ':') >> json_parser)))
 
 end
+
 
 let c1 () =
   let open Nparser.Char_parser in
