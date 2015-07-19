@@ -1,3 +1,5 @@
+(* Parser def *)
+
 module type Reader = sig
   type t
 
@@ -18,15 +20,14 @@ module type Reader = sig
   }
 
   val init_state_from_t : t -> state
-
 end
 
-module type Char_Reader_S =
+module type CharReaderS =
   Reader with type elem = char
           and type pos = int
           and type t = string
 
-module Char_Reader : Char_Reader_S = struct
+module CharReader : CharReaderS = struct
   type t = string
 
   type pos = int
@@ -52,10 +53,10 @@ module Char_Reader : Char_Reader_S = struct
     row = 0;
     col = 0;
   }
-
 end
 
 module type Parser = sig
+  
   include Reader
 
   type 'a parse_result =
@@ -64,7 +65,9 @@ module type Parser = sig
 
   type 'a parser = state -> 'a parse_result
 
-  type _ cgrammar =
+  type _ cgrammar = ..
+  
+  type _ cgrammar +=
     | Lit    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
     | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
@@ -74,8 +77,7 @@ module type Parser = sig
     | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
     | TakeWhile : ('a -> bool) -> ('a list) cgrammar
     | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
-    | NT: string * 'a cgrammar Lazy.t -> 'a cgrammar
-
+    (* | NT:  'a nt_type * 'a cgrammar Lazy.t -> 'a cgrammar *)
 
   val lit : elem -> elem cgrammar
 
@@ -96,7 +98,7 @@ module type Parser = sig
   val (<*>) : ('a -> 'b) -> 'a cgrammar -> 'b cgrammar
 end
 
-module Parser (Reader: Reader) : Parser
+module BasicParser (Reader: Reader) : Parser
   with type t    = Reader.t
    and type pos  = Reader.pos
    and type elem = Reader.elem = struct
@@ -109,7 +111,9 @@ module Parser (Reader: Reader) : Parser
 
   type 'a parser = state -> 'a parse_result
 
-  type _ cgrammar =
+  type _ cgrammar = ..
+
+  type _ cgrammar +=
     | Lit    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
     | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
@@ -119,7 +123,7 @@ module Parser (Reader: Reader) : Parser
     | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
     | TakeWhile : ('a -> bool) -> ('a list) cgrammar
     | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
-    | NT: string * 'a cgrammar Lazy.t -> 'a cgrammar
+    (* | NT: 'a T.nt_type * 'a cgrammar Lazy.t -> 'a cgrammar *)
 
   module Nonce = struct
     let i = ref 0L
@@ -149,8 +153,9 @@ module Parser (Reader: Reader) : Parser
 
 end
 
-module Char_parser = struct
-  include Parser(Char_Reader)
+module BasicCharParser = struct
+  include BasicParser(CharReader)
+
   let init_state_from_string str = {
     input = str;
     length = String.length str;
@@ -158,13 +163,5 @@ module Char_parser = struct
     row = 0;
     col = 0;
   }
-
-  type json = Obj of obj | Arr of arr | StringLit of string
-  and  obj = member list
-  and  member = string * json
-  and  arr = json list
-
-  type t2 = A of t3 | S of string
-  and t3 = t2
-
 end
+

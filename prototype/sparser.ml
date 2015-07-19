@@ -1,170 +1,122 @@
-open Print_code
-open Format
-open Gengenlet
+(* Some basic parsers. They are slow. These parser modules should be
+   put into functor (fparser.ml) and then we'll have an optimized parser *)
 
-module PP = struct
-  let pp_code code = print_code Format.std_formatter code
-  let pp_closed_code code = print_closed_code Format.std_formatter code
-  let format_code closed_code = format_code Format.std_formatter closed_code
+open Codemap
+
+type _ nttype = ..
+
+type 'a typeable = {
+  constructor : 'a nttype;
+  eq : 'b. 'b nttype -> ('a, 'b) Eq.t option
+}
+
+module type NTType = sig
+  type t
+  type _ nttype += T : t nttype
+  val typeable : t typeable
 end
 
-module Nonce = struct
-  let i = ref 0L
-
-  let nonce () = i := Int64.succ !i; Int64.to_string !i
+module MakeNTType (S: sig type t end) : NTType with type t = S.t = struct
+  type t = S.t
+  type _ nttype += T : t nttype
+  let typeable = {
+    constructor = T;
+    eq =
+      let f : type b. b nttype -> (t, b) Eq.t option = fun t ->
+        match t with
+        | T -> Some Eq.Refl
+        | _ -> None
+      in f
+  }
 end
 
+let f (type a) (x : a) : (module NTType with type t = a) =
+  (module MakeNTType(struct type t = a end))
 
-open Nparser.Char_parser
+type s = A and t = B
 
-(* state is dynamic, grammar is static *)
-type 'a parser_code = state code -> 'a parse_result code
+let g (type a) (type b) (x : a) (y : b) =
+  let m = f x in
+  let n = f y in
+  let module M = (val m : NTType with type t = a) in
+  let module N = (val n : NTType with type t = b) in
+  M.typeable.eq N.typeable.constructor
 
-type 'a parser_generator =
-  'a cgrammar -> 'a parser_code
+let h (type a) (x: a) =
+  let m = f x in
+  let module M = (val m : NTType with type t = a) in
+  M.typeable.eq M.typeable.constructor
 
-module CFParser = struct
 
-  (* let-rec insertion helper by Jeremy *)
-  let letrec : 'a 'b 'c.(('a -> 'b) code -> (('a -> 'b) code -> unit code) -> 'c) -> 'c =
-    fun k ->
-      let r = genlet (.< ref (fun _ -> assert false) >.) in
-      k .< ! .~r >. (fun e -> genlet (.<.~r := .~e >.))
+let test1 () =
+  let x = A in
+  match h x with
+  | Some _ -> print_endline "true"
+  | None -> print_endline "false"
 
-  let gen_lit_parser : char -> char parser_code =
-    fun c state -> .<
-      let ix = (.~state).index in
-      let f = Failure .~state in
-      if ix < (.~state).length then
-        let e1 = (.~state).input.[ix] in
-        if e1 = c then .~(
-          if c = '\n' then
-            .<Success (e1, {.~state with row = (.~state).row + 1; col = 0; index = ix + 1})>.
-          else
-            .<Success (e1, {.~state with col = (.~state).col + 1; index = ix + 1})>.)
-        else f
-      else f
-    >.
-    
-  let gen_seq_parser :
-    ('a parser_code) -> ('b parser_code) -> ('a * 'b) parser_code =
-    fun pcx pcy state -> .<
-      let res1 = .~(pcx state) in
-        match res1 with
-        | Success (r1, state1) -> begin
-          let res2 = .~(pcy .<state1>.) in
-          match res2 with
-          | Success (r2, state2) -> Success ((r1, r2), state2)
-          | Failure _ as f -> f end
-        | Failure _ as f-> f >.
+let test2 () =
+  let x = A and y = B in
+  match g x y with
+  | Some _ -> print_endline "true"
+  | None -> print_endline "false"
 
-  let gen_left_parser :
-    ('a parser_code) -> ('b parser_code) -> ('a parser_code) =
-    fun pcx pcy state -> .<
-      let res1 = .~(pcx state) in
-      match res1 with
-      | Success (r1, state1) -> begin
-        let res2 = .~(pcy .<state1>.) in
-        match res2 with
-        | Success (_, state2) -> Success (r1, state2)
-        | Failure _ as f -> f end
-      | Failure _ as f -> f >.
+let test3 () =
+  let x = A and y = A in
+  match g x y with
+  | Some _ -> print_endline "true"
+  | None -> print_endline "false"
+ 
 
-  let gen_right_parser :
-    ('a parser_code) -> ('b parser_code) -> ('b parser_code) =
-    fun pcx pcy state -> .<
-      let res1 = .~(pcx state) in
-        match res1 with
-        | Success (_, state1) -> .~(pcy .<state1>.)
-        | Failure state1 -> Failure state1 >.
+let () =
+  test1 (); (* true *)
+  test2 (); (* false *)
+  test3 () (* false *)
+(*
 
-  let gen_either_parser :
-    ('a parser_code) list -> ('a parser_code) =
-    fun l s ->
-      let combine : ('a parser_code) -> ('a parser_code) -> ('a parser_code) =
-        fun pcx pcy state -> .<
-          let res1 = .~(pcx state) in
-          match res1 with
-          | Success (_, _) as s -> s
-          | Failure _ -> .~(pcy state)>. in
-      match l with
-      | x :: res ->
-        (List.fold_left combine x res) s
-      | _ -> failwith "Invalid grammar"
+type 'a typeable = {
+  t : 'a nttype;
+  eq : 'b. 'b nttype -> ('a, 'b) Eq.t option
+}
 
-  let gen_rep_parser : ('a parser_code) -> ('a list parser_code) = fun p s ->
-    .<let rec rep_parser state acc =
-        let res = .~(p .<state>.) in
-        match res with
-        | Success (r1, s1) -> rep_parser s1 (r1 :: acc)
-        | Failure s1 -> Success (acc, s1) in rep_parser .~s []>.
+let f a =
+*)
+
+(*
+module Test_I_parser = struct
+  include Nparser.BasicCharParser
+
+  type t2 = A of t3 | C of char and t3 = t2
   
-  (** GADT, weeeeeeeeeee! *)
-  let rec gen_parser : type a. a parser_generator = fun c state ->
-    match c with
-    | Lit e -> gen_lit_parser e state
-    | Either gl -> gen_either_parser (List.map gen_parser gl) state
-    (*
-    | Seq (g1, g2) ->
-      let c1 = gen_parser g1 and c2 = gen_parser g2 in
-      gen_seq_parser c1 c2 state
-    | Left (g1, g2) ->
-      let c1 = gen_parser g1 and c2 = gen_parser g2 in
-      gen_left_parser c1 c2 state
-    | Right (g1, g2) ->
-      let c1 = gen_parser g1 and c2 = gen_parser g2 in
-      gen_right_parser c1 c2 state
-    | Either (g1, g2) ->
-      let c1 = gen_parser g1 and c2 = gen_parser g2 in
-      gen_either_parser c1 c2 state
-    | Rep g -> gen_rep_parser (gen_parser g) state 
-    *)
-    | _ -> failwith "TODO"
+  module T = struct
+      
+    type _ nt_type =
+      | T2 : t2 nt_type
+      | T3 : t3 nt_type
+  end
 
-  include Nonce
+  include T
 
-  let str_parser = NT (nonce (), lazy (
-    (fun cl -> List.map (fun c -> String.make 1 c) cl |> String.concat "") <*>
-    ((lit '"') >> (TakeWhile (fun c -> c <> '"')) << (lit '"'))))
+  type _ cgrammar += NT : 'a nt_type * 'a cgrammar Lazy.t -> 'a cgrammar
 
-  let rec t2_parser = NT (nonce (), lazy (
-      either [(fun arr -> A arr) <*> arr_parser;
-              ((fun str -> S str) <*> str_parser)]))
-  and arr_parser = NT (nonce (), lazy (
-      (lit '[') >> t2_parser << (lit ']')))
+  open Codemap
 
-  let either_test = NT (nonce (), lazy (either ([
-      lit 'a'; lit 'b'; lit 'c'; lit 'd'; lit 'e'; lit 'f'])))
+  module TEq = struct
+    type 'a key = 'a nt_type
+    let equal : type a b. a key -> b key -> (a, b) Eq.t option =
+      fun x y ->
+        match x, y with
+        | T2, T2 -> Some Eq.Refl
+        | T3, T3 -> Some Eq.Refl
+        | _ -> None
+  end
 
-  let rec json_parser = NT (nonce (), lazy (either ([
-      ((fun o -> Obj o) <*> obj_parser);
-      ((fun arr -> Arr arr) <*> arr_parser);
-      ((fun s -> StringLit s) <*> str_parser)])))
-  and obj_parser = NT (nonce (), lazy (
-    (lit '{') >> (repsep member_parser (lit ',')) << (lit '}')))
-  and arr_parser = NT (nonce (), lazy (
-    (lit '[') >> (repsep json_parser (lit ',')) << (lit ']')))
-  and member_parser = NT (nonce (), lazy (
-    str_parser <~> ((lit ':') >> json_parser)))
+  module Map = CodeMap(TEq)
+
+  let rec t2p = NT (T2, lazy (either [
+    (fun arr -> A arr) <*> t3p;
+    (fun c -> C c) <*> lit 'c']))
+  and t3p = NT (T3, lazy (lit '[' >> t2p << lit ']'))
 
 end
-
-
-let c1 () =
-  let open Nparser.Char_parser in
-  let parser_code = CFParser.gen_parser CFParser.either_test in
-  let s = init_state_from_string "c" in
-  parser_code .<s>.
-
-let see_code () =
-  (* add runtime search path because we are using ``ocamlbuild'' *)
-  Runcode.(add_search_path "./_build");
-  PP.pp_code (c1 ())
-
-let run () =
-  Runcode.(add_search_path "./_build");
-  match Runcode.(!. (c1 ())) with
-  | Nparser.Char_parser.Failure _ -> failwith "Parsing failed"
-  | Nparser.Char_parser.Success (c, s) -> Printf.printf "%c\n" c
-
-let () = see_code ()
+*)
+let () = Runcode.(add_search_path "./_build")

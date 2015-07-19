@@ -1,14 +1,13 @@
-#
-# Build system for ocs library and interpreter
-#
 all: clean build
 
 OCAMLBUILD = ocamlbuild
-METAOCAMLC = metaocamlc
-TARGET = nparser.byte sparser.byte
+OCAMLC = metaocamlc
+TARGET = codemap.byte nparser.byte sparser.byte
+TAGS = annot,bin_annot
+PKGS = bigarray,genlet
 
 build:
-	$(OCAMLBUILD) -tag annot -tag bin_annot -pkgs genlet,bigarray -ocamlc $(METAOCAMLC) $(TARGET)
+	$(OCAMLBUILD) -tag $(TAGS) -pkgs $(PKGS) -ocamlc $(OCAMLC) $(TARGET)
 
 clean:
 	ocamlbuild -ocamlc $(METAOCAMLC) -clean
