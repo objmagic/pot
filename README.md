@@ -1,7 +1,7 @@
 # Pot
 **pot** is a parser generator.  
 
-Read more at [Wiki Page](https://github.com/marklrh/p/wiki)
+Read more at [Wiki Page](https://github.com/marklrh/pot/wiki)
 
 ### Dependencies
 * MetaOCaml  
