@@ -1,122 +1,44 @@
 (* Some basic parsers. They are slow. These parser modules should be
    put into functor (fparser.ml) and then we'll have an optimized parser *)
 
-open Codemap
+module Nonce = struct
+  
+  let i = ref 0L
 
-type _ nttype = ..
-
-type 'a typeable = {
-  constructor : 'a nttype;
-  eq : 'b. 'b nttype -> ('a, 'b) Eq.t option
-}
-
-module type NTType = sig
-  type t
-  type _ nttype += T : t nttype
-  val typeable : t typeable
+  let nonce () = i := Int64.succ !i; Int64.to_string !i
 end
 
-module MakeNTType (S: sig type t end) : NTType with type t = S.t = struct
-  type t = S.t
-  type _ nttype += T : t nttype
-  let typeable = {
-    constructor = T;
-    eq =
-      let f : type b. b nttype -> (t, b) Eq.t option = fun t ->
-        match t with
-        | T -> Some Eq.Refl
-        | _ -> None
-      in f
-  }
+
+module Json_parser = struct
+  open Nparser.BasicCharParser
+
+  open Nonce
+
+  type json = Obj of obj | Arr of arr | StringLit of string
+  and  obj = member list
+  and  member = string * json
+  and  arr = json list
+
+  let str_parser =
+    ((lit '"') >> (TakeWhile (fun c -> .<.~c <> '"'>.)) << (lit '"'))
+
+  let rec json_parser = NT ("json_parser", lazy (either ([
+      ((fun o -> Obj o) <*> obj_parser);
+      ((fun arr -> Arr arr) <*> arr_parser);
+      ((fun s -> StringLit s) <*> str_parser)])))
+  and obj_parser = NT ("obj_parser", lazy (
+    (lit '{') >> (repsep member_parser (lit ',')) << (lit '}')))
+  and arr_parser = NT ("arr_parser", lazy (
+    (lit '[') >> (repsep json_parser (lit ',')) << (lit ']')))
+  and member_parser = NT ("member_parser", lazy (
+      str_parser <~> ((lit ':') >> json_parser)))
 end
 
-let f (type a) (x : a) : (module NTType with type t = a) =
-  (module MakeNTType(struct type t = a end))
 
-type s = A and t = B
-
-let g (type a) (type b) (x : a) (y : b) =
-  let m = f x in
-  let n = f y in
-  let module M = (val m : NTType with type t = a) in
-  let module N = (val n : NTType with type t = b) in
-  M.typeable.eq N.typeable.constructor
-
-let h (type a) (x: a) =
-  let m = f x in
-  let module M = (val m : NTType with type t = a) in
-  M.typeable.eq M.typeable.constructor
-
-
-let test1 () =
-  let x = A in
-  match h x with
-  | Some _ -> print_endline "true"
-  | None -> print_endline "false"
-
-let test2 () =
-  let x = A and y = B in
-  match g x y with
-  | Some _ -> print_endline "true"
-  | None -> print_endline "false"
-
-let test3 () =
-  let x = A and y = A in
-  match g x y with
-  | Some _ -> print_endline "true"
-  | None -> print_endline "false"
- 
-
-let () =
-  test1 (); (* true *)
-  test2 (); (* false *)
-  test3 () (* false *)
-(*
-
-type 'a typeable = {
-  t : 'a nttype;
-  eq : 'b. 'b nttype -> ('a, 'b) Eq.t option
-}
-
-let f a =
-*)
-
-(*
 module Test_I_parser = struct
-  include Nparser.BasicCharParser
 
   type t2 = A of t3 | C of char and t3 = t2
-  
-  module T = struct
-      
-    type _ nt_type =
-      | T2 : t2 nt_type
-      | T3 : t3 nt_type
-  end
-
-  include T
-
-  type _ cgrammar += NT : 'a nt_type * 'a cgrammar Lazy.t -> 'a cgrammar
-
-  open Codemap
-
-  module TEq = struct
-    type 'a key = 'a nt_type
-    let equal : type a b. a key -> b key -> (a, b) Eq.t option =
-      fun x y ->
-        match x, y with
-        | T2, T2 -> Some Eq.Refl
-        | T3, T3 -> Some Eq.Refl
-        | _ -> None
-  end
-
-  module Map = CodeMap(TEq)
-
-  let rec t2p = NT (T2, lazy (either [
-    (fun arr -> A arr) <*> t3p;
-    (fun c -> C c) <*> lit 'c']))
-  and t3p = NT (T3, lazy (lit '[' >> t2p << lit ']'))
 
 end
-*)
+
 let () = Runcode.(add_search_path "./_build")

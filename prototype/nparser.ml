@@ -66,7 +66,6 @@ module type Parser = sig
   type 'a parser = state -> 'a parse_result
 
   type _ cgrammar = ..
-  
   type _ cgrammar +=
     | Lit    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
@@ -75,9 +74,8 @@ module type Parser = sig
     | Either : 'a cgrammar list  -> 'a cgrammar
     | Rep    : 'a cgrammar -> ('a list) cgrammar
     | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
-    | TakeWhile : ('a -> bool) -> ('a list) cgrammar
     | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
-    (* | NT:  'a nt_type * 'a cgrammar Lazy.t -> 'a cgrammar *)
+    | NT:  string * 'a cgrammar Lazy.t -> 'a cgrammar
 
   val lit : elem -> elem cgrammar
 
@@ -92,8 +90,6 @@ module type Parser = sig
   val rep : 'a cgrammar -> ('a list) cgrammar
 
   val repsep : 'a cgrammar -> 'b cgrammar -> ('a list) cgrammar
-
-  val takewhile : ('a -> bool) -> ('a list) cgrammar
 
   val (<*>) : ('a -> 'b) -> 'a cgrammar -> 'b cgrammar
 end
@@ -112,7 +108,7 @@ module BasicParser (Reader: Reader) : Parser
   type 'a parser = state -> 'a parse_result
 
   type _ cgrammar = ..
-
+  
   type _ cgrammar +=
     | Lit    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
@@ -121,9 +117,8 @@ module BasicParser (Reader: Reader) : Parser
     | Either : 'a cgrammar list  -> 'a cgrammar
     | Rep    : 'a cgrammar -> ('a list) cgrammar
     | Repsep : 'a cgrammar * 'b cgrammar -> ('a list) cgrammar
-    | TakeWhile : ('a -> bool) -> ('a list) cgrammar
     | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
-    (* | NT: 'a T.nt_type * 'a cgrammar Lazy.t -> 'a cgrammar *)
+    | NT: string * 'a cgrammar Lazy.t -> 'a cgrammar
 
   module Nonce = struct
     let i = ref 0L
@@ -147,14 +142,17 @@ module BasicParser (Reader: Reader) : Parser
 
   let repsep a b = Repsep (a, b)
 
-  let takewhile f = TakeWhile f
-
   let (<*>) f a = Trans (f, a)
 
 end
 
 module BasicCharParser = struct
   include BasicParser(CharReader)
+
+  type _ cgrammar +=
+    | TakeWhile : (char code -> bool code) -> string cgrammar
+
+  let takewhile f = TakeWhile f
 
   let init_state_from_string str = {
     input = str;
