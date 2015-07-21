@@ -2,7 +2,7 @@ all: clean build
 
 OCAMLBUILD = ocamlbuild
 OCAMLC = metaocamlc
-TARGET = nparser.byte sparser.byte tmap.byte fparser.byte
+TARGET = tmap.byte nparser.byte sparser.byte fparser.byte
 TAGS = annot,bin_annot
 PKGS = bigarray,genlet
 
@@ -11,6 +11,6 @@ build:
 
 clean:
 	ocamlbuild -ocamlc $(METAOCAMLC) -clean
-	rm -rf *.cmi *.cmo *.out *.byte
+	rm -rf *.cmi *.cmo *.out *.byte _build
 
 .PHONY: byte clean

@@ -12,22 +12,9 @@ end
 
 (* state is dynamic, grammar is static *)
 
-open Nparser.BasicCharParser
-open Tmap
-
-type 'a parser_code = state code -> 'a parse_result code
-
-type 'a parser_generator =
-  'a cgrammar -> 'a parser_code
-
 module CFParser = struct
 
-  (* let-rec insertion helper by Jeremy *)
-  let letrec : 'a 'b 'c.(('a -> 'b) code -> (('a -> 'b) code -> unit code) -> 'c) -> 'c =
-    fun k ->
-      let r = genlet (.< ref (fun _ -> assert false) >.) in
-      k .< ! .~r >. (fun e -> genlet (.<.~r := .~e >.))
-
+  open Sparser.BasicFParser
 
   let gen_lit_parser : char -> char parser_code =
     fun c state -> .<
@@ -139,8 +126,7 @@ module CFParser = struct
     let str, state = tw_parser .~s in
     Success (str, state)>.
 
-  module CodeMap = Tmap(struct type 'a value = 'a parser_code end)
-
+  (*
   let analyze_grammar : type a. a cgrammar -> (string, bool) Hashtbl.t = fun g ->
     let htb : (string, bool) Hashtbl.t = Hashtbl.create 10 in
     let rec dfs : type a. a cgrammar -> unit = fun g ->
@@ -159,44 +145,36 @@ module CFParser = struct
       | Trans (_, g) -> dfs g
       | _ -> () in
     dfs g;
-    htb
+    htb *)
 
-  type _ cgrammar +=
-      | TaggedNT : 'a CodeMap.key * 'a cgrammar Lazy.t -> 'a cgrammar
-
-  let preprocess_grammar : type a. a cgrammar -> CodeMap.t * a cgrammar = fun g ->
-    let rec dfs : type a. CodeMap.t -> a cgrammar -> CodeMap.t * a cgrammar =
+  let preprocess_grammar : type a. a cgrammar -> CodeMap.t = fun g ->
+    let rec dfs : type a. CodeMap.t -> a cgrammar -> CodeMap.t =
       fun m g ->
         match g with
-        | Lit _ as g -> (m, g)
+        | Lit _ -> m
         | Seq (g1, g2) ->
-          let m', g1' = dfs m, g1 in
-          let m'', g2' = dfs m g2 in
-          m'', Seq (g1', g2')
+          let m' = dfs m g1 in dfs m' g2
         | Left (g1, g2) ->
-          let m' , g1' = dfs m  g1 in
-          let m'', g2' = dfs m' g2 in
-          m'', Left (g1', g2')
+          let m'  = dfs m  g1 in dfs m' g2
         | Right (g1, g2) ->
-          let m', g1' = dfs m g1 in
-          let m'', g2' = dfs m' g2 in
-          m'', Right (g1', g2')
+          let m' = dfs m g1 in dfs m' g2
         | Either gl ->
-          let ff g (m, gl) = let m', g' = dfs m g in m', (g :: gl) in
-          let m', gl' = List.fold_right ff gl (m, []) in m', Either gl'
-        | Rep g -> let m', g' = dfs m g in m', Rep g'
+          let ff g m = dfs m g in
+          List.fold_right ff gl m
+        | Rep g -> dfs m g
         | Repsep (g1, g2) ->
-          let m', g1' = dfs m g1 in
-          let m'', g2' = dfs m' g2 in
-          m'', Repsep (g1', g2')
-        | Trans (f, g1) ->
-          let m', g1' = dfs m g1 in
-          m', Trans (f, g1')
-        | TaggedNT (_, _) as tnt -> m, tnt
-        | NT (s, lg) -> assert false
-        | _ -> assert false in
+          let m' = dfs m g1 in dfs m' g2
+        | TakeWhile _ -> m
+        | Trans (_, g1) -> dfs m g1
+        | FNT lp -> begin
+          let k, g = Lazy.force lp in
+          match CodeMap.find m k with
+          | Some _ -> m
+          | None ->
+            let m' = CodeMap.add m k (ref (fun _ -> assert false)) in
+            dfs m' g end
+        | _ -> failwith "Invalid type constructor" in
     dfs CodeMap.empty g
-
 
   let gen_parser : type a. a parser_generator = fun c state ->
     let rec gen_parser : type a. a parser_generator = fun c state ->
@@ -224,19 +202,18 @@ module CFParser = struct
       | _ -> failwith "TODO" in
     gen_parser c state
 
-
 end
 
 module Test_expansion = struct
-  open Sparser
+  open Sparser.FJsonParser
   let json_test () =
-    let hbt = CFParser.analyze_grammar (Json_parser.json_parser) in
-    let iterf k _ = print_endline k in
-    Hashtbl.iter iterf hbt
+    let map = CFParser.preprocess_grammar json_parser in
+    Printf.printf "size : %d\n" (Sparser.BasicFParser.CodeMap.size map)
 end
 
-
 module Test = struct
+
+  open Sparser.BasicFParser
 
   let state s = init_state_from_string s
 
@@ -291,5 +268,5 @@ end
 let () = Runcode.(add_search_path "./_build")
 
 let () =
-  Test.see_str ()
+  Test_expansion.json_test ()
 
