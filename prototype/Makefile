@@ -2,7 +2,7 @@ all: clean build
 
 OCAMLBUILD = ocamlbuild
 OCAMLC = metaocamlc
-TARGET = codemap.byte nparser.byte sparser.byte
+TARGET = nparser.byte sparser.byte tmap.byte fparser.byte
 TAGS = annot,bin_annot
 PKGS = bigarray,genlet
 
