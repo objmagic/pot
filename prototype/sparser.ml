@@ -1,14 +1,7 @@
 (* Some basic parsers. They are slow. These parser modules should be
    put into functor (fparser.ml) and then we'll have an optimized parser *)
 
-module Nonce = struct
-  let i = ref 0L
-
-  let nonce () = i := Int64.succ !i; Int64.to_string !i
-end
-
-
-module Json_parser = struct
+module JsonParser = struct
   open Nparser.BasicCharParser
 
   type json = Obj of obj | Arr of arr | StringLit of string
@@ -31,8 +24,9 @@ module Json_parser = struct
       str_parser <~> ((lit ':') >> json_parser)))
 end
 
+open Codemap
+
 module BasicFParser = struct
-  open Tmap
 
   include Nparser.BasicCharParser
 
@@ -41,7 +35,7 @@ module BasicFParser = struct
   type 'a parser_generator =
     'a cgrammar -> 'a parser_code
 
-  module CodeMap = Tmap(struct type 'a value = 'a parser_code ref type 'a s = 'a cgrammar end)
+  module CodeMap = MakeCodeMap(struct type 'a v = 'a parser_code ref end)
 
   type _ cgrammar +=
     | FNT : ('a CodeMap.key * 'a cgrammar) Lazy.t -> 'a cgrammar
@@ -74,10 +68,25 @@ module FJsonParser = struct
       str_parser <~> ((lit ':') >> json_parser))))
 end
 
-module Test_I_parser = struct
+module FTIParser = struct
+  open BasicFParser
 
   type t2 = A of t3 | C of char and t3 = t2
 
+  (* Failed because we cannot handle left recursion *)
+  let rec t2_parser = FNT (lazy (CodeMap.gen (either ([
+      (fun arr -> A arr) <*> arr_parser;
+      (fun c -> C c) <*> lit 'c']))))
+  and arr_parser = FNT (lazy (CodeMap.gen (
+      (lit '[') >> t2_parser << (lit ']'))))
+
+  (* Successful *)
+  let test = FNT (lazy (CodeMap.gen (lit 'c')))
+
+  (* Successful *)
+  let rec test2 = FNT (lazy (CodeMap.gen (lit 'c' <~> sub_parser)))
+  and sub_parser = FNT (lazy (CodeMap.gen (lit 'd')))
 end
+
 
 let () = Runcode.(add_search_path "./_build")

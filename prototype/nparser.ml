@@ -146,7 +146,20 @@ module BasicParser (Reader: Reader) : Parser
 
 end
 
-module BasicCharParser = struct
+module type BCP = sig
+  include Parser with type t = CharReader.t
+                  and type pos = CharReader.pos
+                  and type elem = CharReader.elem
+
+  type _ cgrammar +=
+    | TakeWhile : (char code -> bool code) -> string cgrammar
+
+  val takewhile : (char code -> bool code) -> string cgrammar
+
+  val init_state_from_string : string -> state
+end
+
+module BasicCharParser : BCP = struct
   include BasicParser(CharReader)
 
   type _ cgrammar +=

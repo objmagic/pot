@@ -4,6 +4,8 @@ open Print_code
 open Format
 open Gengenlet
 
+open Sparser
+
 module PP = struct
   let pp_code code = print_code Format.std_formatter code
   let pp_closed_code code = print_closed_code Format.std_formatter code
@@ -14,7 +16,7 @@ end
 
 module CFParser = struct
 
-  open Sparser.BasicFParser
+  open BasicFParser
 
   let gen_lit_parser : char -> char parser_code =
     fun c state -> .<
@@ -177,6 +179,7 @@ module CFParser = struct
     dfs CodeMap.empty g
 
   let gen_parser : type a. a parser_generator = fun c state ->
+    let m = ref CodeMap.empty in
     let rec gen_parser : type a. a parser_generator = fun c state ->
       match c with
       | Lit e -> gen_lit_parser e state
@@ -197,18 +200,41 @@ module CFParser = struct
       | Trans (f, g) ->
         let c1 = gen_parser g in
         gen_trans_parser f c1 state
-      | TakeWhile pred ->
-        gen_tw_parser pred state
-      | _ -> failwith "TODO" in
+      | TakeWhile pred -> gen_tw_parser pred state
+      | FNT lp -> begin
+        let k, g = Lazy.force lp in
+        match CodeMap.find !m k with
+        | None -> begin
+          m := CodeMap.add !m k (ref (fun _ -> assert false));
+          let pcode = gen_parser g in
+          match CodeMap.find !m k with
+          | None -> assert false
+          | Some cr -> cr := pcode;
+          pcode state end
+        | Some cr -> !cr state end
+      | _ -> assert false in
     gen_parser c state
 
 end
 
 module Test_expansion = struct
-  open Sparser.FJsonParser
-  let json_test () =
-    let map = CFParser.preprocess_grammar json_parser in
-    Printf.printf "size : %d\n" (Sparser.BasicFParser.CodeMap.size map)
+  open BasicFParser
+
+  let test_I () =
+    let s = init_state_from_string "cd" in
+    let parser_code = CFParser.gen_parser (FTIParser.test2) in
+    print_endline "reach here";
+    match Runcode.(!. (parser_code .<s>.)) with
+    | Success _ -> print_endline "yeah!"
+    | Failure _ -> print_endline "no"
+
+    (*
+    let map = CFParser.preprocess_grammar FJsonParser.json_parser in
+    let iterf : type a. a CodeMap.key -> a parser_code ref -> unit =
+      fun _ cr -> PP.pp_code .<fun s -> !cr .<s>.>. in
+    CodeMap.iter map {CodeMap.f=iterf};
+    Printf.printf "size : %d\n" (CodeMap.size map)
+       *)
 end
 
 module Test = struct
@@ -268,5 +294,4 @@ end
 let () = Runcode.(add_search_path "./_build")
 
 let () =
-  Test_expansion.json_test ()
-
+  Test_expansion.test_I ()
