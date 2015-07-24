@@ -55,12 +55,31 @@ module FJsonParser = struct
   and  member = string * json
   and  arr = json list
 
+  let pp_json json =
+    let rec bfs t =
+      match t with
+      | Obj o ->
+        let s = String.concat ", " (List.map (fun (s, j) -> s ^ " : " ^ (bfs j) ^ "\n") o) in
+        Printf.sprintf "{ %s}" s
+      | Arr arr ->
+        let s = String.concat "\n" (List.map bfs arr) in
+        Printf.sprintf "[ %s ]" s
+      | StringLit s -> Printf.sprintf "\"%s\"" s in
+    print_endline (bfs json)
+
 end
 
 module FT2Parser = struct
   open BasicFParser
 
   type t2 = A of t3 | C of char and t3 = t2
+
+  let pp_t2 t =
+    let rec bfs t =
+      match t with
+      | A next -> "A (" ^ (bfs next) ^ ")"
+      | C c -> "C (" ^ (Char.escaped c) in
+    print_endline (bfs t)
 
   (* Failed because we cannot handle left recursion *)
 
