@@ -47,172 +47,119 @@ module CFParser = struct
         let res2 = .~(gen_apply pcy .<state1>.) in
         match res2 with
         | Success (r2, state2) -> Success ((r1, r2), state2)
-        | Failure _ -> Failure state1 end
+        | Failure _ -> Failure (.~state) end
       | Failure _ -> Failure (.~state) >.)
-(*
+
   let gen_left_parser :
     ('a parser_code) -> ('b parser_code) -> ('a parser_code) =
-    fun pcx pcy state -> .<
-      let res1 = .~(pcx state) in
+    fun pcx pcy -> T (fun state -> .<
+      let res1 = .~(gen_apply pcx state) in
       match res1 with
       | Success (r1, state1) -> begin
-        let res2 = .~(pcy .<state1>.) in
+        let res2 = .~(gen_apply pcy .<state1>.) in
         match res2 with
         | Success (_, state2) -> Success (r1, state2)
         | Failure _ -> Failure (.~state) end
-      | Failure _ -> Failure (.~state) >.
-
+      | Failure _ -> Failure (.~state) >.)
+  
   let gen_right_parser :
     ('a parser_code) -> ('b parser_code) -> ('b parser_code) =
-    fun pcx pcy state -> .<
-      let res1 = .~(pcx state) in
+    fun pcx pcy -> T (fun state -> .<
+      let res1 = .~(gen_apply pcx state) in
       match res1 with
       | Success (_, state1) -> begin
-        let res2 = .~(pcy .<state1>.) in
+        let res2 = .~(gen_apply pcy .<state1>.) in
         match res2 with
         | Success (_, _) as s -> s
         | Failure _ -> Failure (.~state) end
-      | Failure _ -> Failure (.~state) >.
+      | Failure _ -> Failure (.~state) >.)
 
-  let gen_either_parser :
-    ('a parser_code) list -> ('a parser_code) =
-    fun l s ->
+  let gen_either_parser : ('a parser_code) list -> ('a parser_code) =
+    fun l ->
       let combine : ('a parser_code) -> ('a parser_code) -> ('a parser_code) =
-        fun pcx pcy state -> .<
-          let res1 = .~(pcx state) in
+        fun pcx pcy -> T (fun state -> .<
+          let res1 = .~(gen_apply pcx state) in
           match res1 with
           | Success (_, _) as s -> s
-          | Failure _ -> .~(pcy state)>. in
+          | Failure _ -> .~(gen_apply pcy state)>.) in
       match l with
       | x :: res ->
-        (List.fold_left combine x res) s
-      | _ -> failwith "Invalid grammar"
-
-  let gen_rep_parser : ('a parser_code) -> ('a list parser_code) = fun p s ->
-    .<let rec rep_parser state acc =
-        let res = .~(p .<state>.) in
-        match res with
-        | Success (r1, s1) -> rep_parser s1 (r1 :: acc)
-        | Failure s1 -> Success (List.rev acc, s1) in rep_parser .~s []>.
+        (List.fold_left combine x res)
+      | _ -> failwith "Invalid Either grammar"
+  
+  let gen_rep_parser : ('a parser_code) -> ('a list parser_code) = fun p ->
+    T (
+      fun state -> .<
+        let rec rep_parser state acc =
+          let res = .~(gen_apply p .<state>.) in
+          match res with
+          | Success (r1, s1) -> rep_parser s1 (r1 :: acc)
+          | Failure s1 -> Success (List.rev acc, s1) in
+        rep_parser .~state []>.)
 
   let gen_repsep_parser : ('a parser_code) -> ('b parser_code) -> ('a list parser_code) =
-    fun ap bp s ->
-      .<let rec repsep_parser state acc =
-          let res = .~(ap .<state>.) in
+    fun ap bp -> T (
+      fun state -> .<
+        let rec repsep_parser state acc =
+          let res = .~(gen_apply ap .<state>.) in
           match res with
           | Success (r1, s1) -> begin
-            let res2 = .~(bp .<s1>.) in
+            let res2 = .~(gen_apply bp .<s1>.) in
             match res2 with
             | Success (_, s2) -> repsep_parser s2 (r1 :: acc)
             | Failure s3 -> Success (List.rev (r1 :: acc), s1) end
           | Failure s1 -> Success (List.rev acc, s1)
-        in repsep_parser .~s []>.
+        in repsep_parser .~state []>.)
 
   let gen_trans_parser : ('a -> 'b) -> ('a parser_code) -> ('b parser_code) =
-    fun trans ap state -> .<
-      let res = .~(ap state) in
+    fun trans ap -> T (fun state -> .<
+      let res = .~(gen_apply ap state) in
       match res with
       | Success (r, s) -> Success ((trans r), s)
-      | Failure _ as f -> f>.
+      | Failure _ as f -> f>.)
 
-  let gen_tw_parser : (char code -> bool code) -> string parser_code = fun pred s -> .<
-    let buf = Buffer.create 10 in
-    let len = (.~s).length in
-    let rec tw_parser s =
-      let i = s.index in
-      if i < len then
-        let c = s.input.[i] in
-        if .~(pred .<c>.) then begin
-          Buffer.add_char buf c;
-          if c = '\n' then
-            tw_parser {s with row = s.row + 1; col = 0; index = i + 1}
-          else
-            tw_parser {s with col = s.col + 1; index = i + 1} end
-        else Buffer.contents buf, s
-      else Buffer.contents buf, s in
-    let str, state = tw_parser .~s in
-    Success (str, state)>.
-*)
-  (*
-  let analyze_grammar : type a. a cgrammar -> (string, bool) Hashtbl.t = fun g ->
-    let htb : (string, bool) Hashtbl.t = Hashtbl.create 10 in
-    let rec dfs : type a. a cgrammar -> unit = fun g ->
-      match g with
-      | Lit _ -> ()
-      | NT (id, g) ->
-        if Hashtbl.mem htb id then () else begin
-          Hashtbl.add htb id true;
-          dfs (Lazy.force g) end
-      | Either gl -> List.iter dfs gl
-      | Seq (g1, g2) -> dfs g1; dfs g2
-      | Left (g1, g2) -> dfs g1; dfs g2
-      | Right (g1, g2) -> dfs g1; dfs g2
-      | Rep g -> dfs g
-      | Repsep (g1, g2) -> dfs g1; dfs g2
-      | Trans (_, g) -> dfs g
-      | _ -> () in
-    dfs g;
-    htb *)
-
-  (*
-  let preprocess_grammar : type a. a cgrammar -> CodeMap.t = fun g ->
-    let rec dfs : type a. CodeMap.t -> a cgrammar -> CodeMap.t =
-      fun m g ->
-        match g with
-        | Lit _ -> m
-        | Seq (g1, g2) ->
-          let m' = dfs m g1 in dfs m' g2
-        | Left (g1, g2) ->
-          let m'  = dfs m  g1 in dfs m' g2
-        | Right (g1, g2) ->
-          let m' = dfs m g1 in dfs m' g2
-        | Either gl ->
-          let ff g m = dfs m g in
-          List.fold_right ff gl m
-        | Rep g -> dfs m g
-        | Repsep (g1, g2) ->
-          let m' = dfs m g1 in dfs m' g2
-        | TakeWhile _ -> m
-        | Trans (_, g1) -> dfs m g1
-        | FNT lp -> begin
-          let k, g = Lazy.force lp in
-          match CodeMap.find m k with
-          | Some _ -> m
-          | None ->
-            let m' = CodeMap.add m k (ref (fun _ -> assert false)) in
-            dfs m' g end
-        | _ -> failwith "Invalid type constructor" in
-    dfs CodeMap.empty g
-  *)
+  let gen_tw_parser : (char code -> bool code) -> string parser_code = fun pred ->
+    T (fun state -> .<
+      let buf = Buffer.create 10 in
+      let len = (.~state).length in
+      let rec tw_parser s =
+        let i = s.index in
+        if i < len then
+          let c = s.input.[i] in
+          if .~(pred .<c>.) then begin
+            Buffer.add_char buf c;
+            if c = '\n' then
+              tw_parser {s with row = s.row + 1; col = 0; index = i + 1}
+            else
+              tw_parser {s with col = s.col + 1; index = i + 1} end
+          else Buffer.contents buf, s
+        else Buffer.contents buf, s in
+      let str, state_final = tw_parser .~state in
+      Success (str, state_final)>.)
 
   let rec gen_parser : type a. a cgrammar -> a parser_code = fun c ->
     match c with
-    | Lit e -> gen_lit_parser e (*
-    | Either gl -> gen_either_parser (List.map gen_parser gl) state *)
+    | Lit e -> gen_lit_parser e
+    | Either gl -> gen_either_parser (List.map gen_parser gl)
     | Seq (g1, g2) ->
       let c1 = gen_parser g1 and c2 = gen_parser g2 in
-      gen_seq_parser c1 c2 (*
+      gen_seq_parser c1 c2
     | Left (g1, g2) ->
       let c1 = gen_parser g1 and c2 = gen_parser g2 in
-      gen_left_parser c1 c2 state
+      gen_left_parser c1 c2
     | Right (g1, g2) ->
       let c1 = gen_parser g1 and c2 = gen_parser g2 in
-      gen_right_parser c1 c2 state
-    | Rep g -> gen_rep_parser (gen_parser g) state
+      gen_right_parser c1 c2
+    | Rep g -> gen_rep_parser (gen_parser g)
     | Repsep (g1, g2) ->
       let c1 = gen_parser g1 and c2 = gen_parser g2 in
-      gen_repsep_parser c1 c2 state
+      gen_repsep_parser c1 c2
     | Trans (f, g) ->
       let c1 = gen_parser g in
-      gen_trans_parser f c1 state
-    | TakeWhile pred -> gen_tw_parser pred state *)
-    | FNT lp -> begin
-      let k, g = Lazy.force lp in
-      match gen_parser g with
-      | T tpc -> NT .<fun s -> .~(tpc .<s>.)>.
-      | NT _ as n -> n end
+      gen_trans_parser f c1
+    | TakeWhile pred -> gen_tw_parser pred
+    | FNT lp -> assert false
     | _ -> assert false
-
 
 end
 
