@@ -4,3 +4,5 @@ S .
 PKG genlet
 
 EXT meta
+
+FLG -w -10

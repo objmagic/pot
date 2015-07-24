@@ -30,12 +30,13 @@ module BasicFParser = struct
 
   include Nparser.BasicCharParser
 
-  type 'a parser_code = state code -> 'a parse_result code
+  type 'a t_parser_code = state code -> 'a parse_result code
 
-  type 'a parser_generator =
-    'a cgrammar -> 'a parser_code
+  type 'a nt_parser_code = (state -> 'a parse_result) code
 
-  module CodeMap = MakeCodeMap(struct type 'a v = 'a parser_code ref end)
+  type 'a parser_code = T of 'a t_parser_code | NT of 'a nt_parser_code
+
+  module CodeMap = MakeCodeMap(struct type 'a v = 'a nt_parser_code ref end)
 
   type _ cgrammar +=
     | FNT : ('a CodeMap.key * 'a cgrammar) Lazy.t -> 'a cgrammar
@@ -44,7 +45,7 @@ end
 
 module FJsonParser = struct
   open BasicFParser
-  
+
   type json = Obj of obj | Arr of arr | StringLit of string
   and  obj = member list
   and  member = string * json
@@ -87,6 +88,5 @@ module FTIParser = struct
   let rec test2 = FNT (lazy (CodeMap.gen (lit 'c' <~> sub_parser)))
   and sub_parser = FNT (lazy (CodeMap.gen (lit 'd')))
 end
-
 
 let () = Runcode.(add_search_path "./_build")
