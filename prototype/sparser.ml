@@ -24,6 +24,7 @@ module JsonParser = struct
       str_parser <~> ((lit ':') >> json_parser)))
 end
 
+
 open Codemap
 
 module BasicFParser = struct
@@ -36,10 +37,13 @@ module BasicFParser = struct
 
   type 'a parser_code = T of 'a t_parser_code | NT of 'a nt_parser_code
 
-  module CodeMap = MakeCodeMap(struct type 'a v = 'a nt_parser_code ref end)
+  module CodeMap = MakeCodeMap(struct type 'a v = 'a nt_parser_code end)
 
   type _ cgrammar +=
+    | Trans : ('a code -> 'b code) * 'a cgrammar -> 'b cgrammar
     | FNT : ('a CodeMap.key * 'a cgrammar) Lazy.t -> 'a cgrammar
+
+  let (<*>) f g = Trans (f, g)
 
 end
 
@@ -51,41 +55,20 @@ module FJsonParser = struct
   and  member = string * json
   and  arr = json list
 
-  let str_parser =
-    ((lit '"') >> (TakeWhile (fun c -> .<.~c <> '"'>.)) << (lit '"'))
-
-  let rec json_parser = FNT (lazy (CodeMap.gen (either ([
-      ((fun o -> Obj o) <*> obj_parser);
-      ((fun arr -> Arr arr) <*> arr_parser);
-      ((fun s -> StringLit s) <*> str_parser)]))))
-
-  and obj_parser = FNT (lazy (CodeMap.gen (
-      (lit '{') >> (repsep member_parser (lit ',')) << (lit '}'))))
-
-  and arr_parser = FNT (lazy (CodeMap.gen (
-      (lit '[') >> (repsep json_parser (lit ',')) << (lit ']'))))
-
-  and member_parser = FNT (lazy (CodeMap.gen (
-      str_parser <~> ((lit ':') >> json_parser))))
 end
 
-module FTIParser = struct
+module FT2Parser = struct
   open BasicFParser
 
   type t2 = A of t3 | C of char and t3 = t2
 
   (* Failed because we cannot handle left recursion *)
-  let rec t2_parser = FNT (lazy (CodeMap.gen (either ([
-      (fun arr -> A arr) <*> arr_parser;
-      (fun c -> C c) <*> lit 'c']))))
-  and arr_parser = FNT (lazy (CodeMap.gen (
-      (lit '[') >> t2_parser << (lit ']'))))
 
   (* Successful *)
-  let test = FNT (lazy (CodeMap.gen (lit 'c')))
+  let test_nt = FNT (lazy (CodeMap.gen (lit 'c')))
 
   (* Successful *)
-  let rec test2 = FNT (lazy (CodeMap.gen (lit 'c' <~> sub_parser)))
+  let rec test_nt_2 = FNT (lazy (CodeMap.gen (lit 'c' <~> sub_parser)))
   and sub_parser = FNT (lazy (CodeMap.gen (lit 'd')))
 end
 
