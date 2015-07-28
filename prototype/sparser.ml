@@ -1,6 +1,5 @@
-(* Some basic parsers. They are slow. These parser modules should be
-   put into functor (fparser.ml) and then we'll have an optimized parser *)
-
+(* This file contains modules that should be put in a separate file as
+   required by MetaOCaml. CSP issues... *)
 module JsonParser = struct
   open Nparser.BasicCharParser
 
@@ -24,11 +23,9 @@ module JsonParser = struct
       str_parser <~> ((lit ':') >> json_parser)))
 end
 
-
-open Codemap
-
 module BasicFParser = struct
 
+  open Codemap
   include Nparser.BasicCharParser
 
   type 'a t_parser_code = state code -> 'a parse_result code
@@ -48,7 +45,6 @@ module BasicFParser = struct
 end
 
 module FJsonParser = struct
-  open BasicFParser
 
   type json = Obj of obj | Arr of arr | StringLit of string
   and  obj = member list
@@ -70,7 +66,6 @@ module FJsonParser = struct
 end
 
 module FT2Parser = struct
-  open BasicFParser
 
   type t2 = A of t3 | C of char and t3 = t2
 
@@ -81,14 +76,6 @@ module FT2Parser = struct
       | C c -> "C (" ^ (Char.escaped c) in
     print_endline (bfs t)
 
-  (* Failed because we cannot handle left recursion *)
-
-  (* Successful *)
-  let test_nt = FNT (lazy (CodeMap.gen (lit 'c')))
-
-  (* Successful *)
-  let rec test_nt_2 = FNT (lazy (CodeMap.gen (lit 'c' <~> sub_parser)))
-  and sub_parser = FNT (lazy (CodeMap.gen (lit 'd')))
 end
 
 let () = Runcode.(add_search_path "./_build")

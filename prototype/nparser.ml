@@ -67,7 +67,7 @@ module type Parser = sig
 
   type _ cgrammar = ..
   type _ cgrammar +=
-    | Lit    : elem -> elem cgrammar
+    | Exact    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
     | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
     | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
@@ -77,7 +77,7 @@ module type Parser = sig
     | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
     | NT:  string * 'a cgrammar Lazy.t -> 'a cgrammar
 
-  val lit : elem -> elem cgrammar
+  val exact : elem -> elem cgrammar
 
   val (<~>) : 'a cgrammar -> 'b cgrammar -> ('a * 'b) cgrammar
 
@@ -110,7 +110,7 @@ module BasicParser (Reader: Reader) : Parser
   type _ cgrammar = ..
   
   type _ cgrammar +=
-    | Lit    : elem -> elem cgrammar
+    | Exact    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
     | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
     | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
@@ -128,7 +128,7 @@ module BasicParser (Reader: Reader) : Parser
 
   include Nonce
 
-  let lit elem = Lit elem
+  let exact elem = Exact elem
 
   let (<~>) a b = Seq (a, b)
 
@@ -156,6 +156,8 @@ module type BCP = sig
 
   val takewhile : (char code -> bool code) -> string cgrammar
 
+  val lit :elem -> elem cgrammar
+
   val init_state_from_string : string -> state
 end
 
@@ -166,6 +168,8 @@ module BasicCharParser : BCP = struct
     | TakeWhile : (char code -> bool code) -> string cgrammar
 
   let takewhile f = TakeWhile f
+
+  let lit c = (rep @@ either [exact ' '; exact '\t'; exact '\n'; exact '\r']) >> exact c
 
   let init_state_from_string str = {
     input = str;

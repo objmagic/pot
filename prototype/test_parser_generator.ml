@@ -47,8 +47,24 @@ module Test_expansion = struct
 
     let pp_json_parser_code () = PP.pp_code parser_code
 
+    let read_json fn =
+      let buf = Buffer.create 128 in
+      let c = open_in fn in
+      let rec read () =
+        try
+          Buffer.add_char buf (input_char c);
+          read ()
+        with End_of_file -> () in
+      read ();
+      let s = Buffer.contents buf in
+      String.sub s 0 ((String.length s) -1)
+
+    let show_json () =
+      PP.pp_code parser_code
+
     let run_json () =
-      let s = "{\"1\":[\"2\",\"3\"],\"4123\":\"1\"}" in
+      let s = read_json "sample.json" in
+      print_endline (String.escaped s);
       let state = init_state_from_string s in
       match (Runcode.(!. parser_code)) state with
       | Success (r, s) -> pp_json r; pp_state s
@@ -84,8 +100,7 @@ module Test_expansion = struct
 
 end
 
-(*
-module Test = struct
+module Test_basic = struct
 
   open Sparser.BasicFParser
 
@@ -93,9 +108,7 @@ module Test = struct
  
   let dump_code (g, _, _, _) () =
     let parser_code = GenParser.gen_parser g in
-    match parser_code with
-    | T pc -> PP.pp_code .<fun s -> .~(pc .<s>.)>.
-    | NT npc -> PP.pp_code npc
+    PP.pp_code parser_code
 
   let run_code (g, ss, p1, p2) () =
     let show_res res =
@@ -104,14 +117,12 @@ module Test = struct
       | Failure s -> p2 s in
     let parser_code = GenParser.gen_parser g in
     let f s =
-      match parser_code with
-      | T tpc -> Runcode.(!. (tpc .<s>.)) |> show_res
-      | NT ntpc -> Runcode.(!. ntpc) s |> show_res in
+      Runcode.(!.parser_code) s |> show_res in
     List.iter f ss
 
   let pp_char_list cl =
     let buf = Buffer.create 10 in
-    List.iter (Buffer.add_char buf) cl;
+    List.iter (fun c -> Buffer.add_string buf (Printf.sprintf "%c%c " c ',')) cl;
     Printf.printf "Success: %s\n" (Buffer.to_bytes buf)
 
   let pp_char_pair (c1, c2) = Printf.printf "%c %c\n" c1 c2
@@ -131,20 +142,20 @@ module Test = struct
       state "cde"], pp_char_pair, pp_state
   
   let repsepg = Repsep ((lit 'c'), (lit ',')), [
-      state "c,c";
+      state "c, c";
       state "c";
-      state "c,c,c,c,c,";
+      state "c, c,    c,  c,   c,";
       state "";
       state ","], pp_char_list, pp_state
 
   let strg = ((lit '"') >> (TakeWhile (fun c -> .<.~c <> '"'>.)) << (lit '"')),
              [state "\"abc\"";state "\"a\"";state "\"\""; state "\""; state "\"a"],
              print_endline, pp_state
+
 end
-*)
 
 let () = Runcode.(add_search_path "./_build")
 
-open Test_expansion
-
-let () = TestJsonParser.run_json ()
+let () =
+  let open Test_expansion in
+  TestJsonParser.show_json ()

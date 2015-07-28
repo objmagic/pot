@@ -39,7 +39,7 @@ module type Parser = sig
 
   type _ cgrammar = ..
   type _ cgrammar +=
-    | Lit    : elem -> elem cgrammar
+    | Exact    : elem -> elem cgrammar
     | Seq    : 'a cgrammar * 'b cgrammar -> ('a * 'b) cgrammar
     | Left   : 'a cgrammar * 'b cgrammar -> 'a cgrammar
     | Right  : 'a cgrammar * 'b cgrammar -> 'b cgrammar
@@ -49,7 +49,7 @@ module type Parser = sig
     | Trans : ('a -> 'b) * 'a cgrammar -> 'b cgrammar
     | NT:  string * 'a cgrammar Lazy.t -> 'a cgrammar
 
-  val lit : elem -> elem cgrammar
+  val exact : elem -> elem cgrammar
 
   val (<~>) : 'a cgrammar -> 'b cgrammar -> ('a * 'b) cgrammar
 
@@ -81,7 +81,10 @@ module type BCP = sig
 
   val takewhile : (char code -> bool code) -> string cgrammar
 
+  val lit : elem -> elem cgrammar
+
   val init_state_from_string : string -> state
+
 end
 
 module BasicCharParser : BCP

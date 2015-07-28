@@ -4,6 +4,7 @@ open Sparser
 
 (* state is dynamic, grammar is static *)
 
+
 module GenParser = struct
 
   open BasicFParser
@@ -137,7 +138,7 @@ module GenParser = struct
 
   let rec gen_parser : type a. a cgrammar -> a parser_code = fun c ->
     match c with
-    | Lit e -> lit_parser e
+    | Exact e -> lit_parser e
     | Either gl -> either_parser (List.map gen_parser gl)
     | Seq (g1, g2) ->
       let c1 = gen_parser g1 and c2 = gen_parser g2 in
@@ -173,11 +174,6 @@ module GenParser = struct
       match gen_parser c with
       | T tpc -> .<fun s -> .~(tpc .<s>.)>.
       | NT ntpc -> ntpc)>.
-  
-  let mem_apply pc state =
-    match pc with
-    | T tpc -> tpc state
-    | NT ntpc -> assert false
 
 end
 
